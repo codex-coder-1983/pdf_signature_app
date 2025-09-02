@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Upload Signatures</title>
+    <style>
+      body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:32px}
+      .box{max-width:640px;margin:0 auto}
+      input[type=file]{display:block;margin-bottom:12px}
+      .hint{color:#555;font-size:0.9rem}
+      .btn{padding:8px 12px;border-radius:6px;border:1px solid #333;background:#111;color:#fff}
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <h1>Upload Signatures</h1>
+      <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+        <label for="signatures">Select one or more signature images</label>
+        <input type="file" id="signatures" name="signatures" accept="image/*" multiple required />
+        <div class="hint">Allowed types: png, jpg, jpeg, webp, gif. Files will be combined into one image.</div>
+        <br />
+        <button class="btn" type="submit">Upload & Combine</button>
+      </form>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul>
+            {% for category, msg in messages %}
+              <li style="color: {{ 'red' if category=='error' else 'green' }}">{{ msg }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+    </div>
+  </body>
+</html>
