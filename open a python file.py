@@ -13,7 +13,10 @@ def open_in_idle():
     file_path = filedialog.askopenfilename(
         title="Select a Python file",
         initialdir=folder,
-        filetypes=[("Python Files", "*.py")]
+        filetypes=[
+            ("Python and HTML Files", ("*.py", "*.html")),
+            ("All Files", "*.*"),
+        ]
     )
 
     root.destroy()
