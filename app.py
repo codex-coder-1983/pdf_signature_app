@@ -63,21 +63,26 @@ def place_signature():
 
 
 def insert_signature_with_coords(pdf_path, sig_path, output_pdf, coords):
-    """Insert signature image into PDF using coordinates from frontend."""
     doc = fitz.open(pdf_path)
     page = doc[coords["page"]]
 
-    # PDF coordinates: bottom-left origin
     page_height = page.rect.height
     x, y = coords["x"], coords["y"]
     width, height = coords["width"], coords["height"]
 
-    rect = fitz.Rect(x, page_height - y - height, x + width, page_height - y)
+    # Flip y coordinate (browser top-left → PDF bottom-left)
+    rect = fitz.Rect(
+        x,
+        page_height - y - height,
+        x + width,
+        page_height - y
+    )
 
     page.insert_image(rect, filename=sig_path, keep_proportion=False, overlay=True)
 
     doc.save(output_pdf)
     doc.close()
+
 
 
 if __name__ == "__main__":

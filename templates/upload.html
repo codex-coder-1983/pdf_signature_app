@@ -37,6 +37,7 @@
 
   <script>
     let pdfDoc, pageNum = 1, signatureEl, sigData;
+    let scale = 1.5; // keep scale consistent everywhere
 
     document.getElementById("uploadForm").onsubmit = async function(e) {
       e.preventDefault();
@@ -63,7 +64,6 @@
 
     function renderPage(num) {
       pdfDoc.getPage(num).then(function(page) {
-        let scale = 1.5;
         let viewport = page.getViewport({ scale: scale });
         let canvas = document.createElement("canvas");
         let ctx = canvas.getContext("2d");
@@ -129,14 +129,17 @@
 
     document.getElementById("saveBtn").onclick = async function() {
       let rect = signatureEl.getBoundingClientRect();
-      let pdfRect = document.querySelector("#pdf-viewer canvas").getBoundingClientRect();
+      let canvas = document.querySelector("#pdf-viewer canvas");
+      let pdfRect = canvas.getBoundingClientRect();
 
+      // Convert from canvas pixels → PDF points
       let coords = {
         page: pageNum - 1,
-        x: rect.left - pdfRect.left,
-        y: rect.top - pdfRect.top,
-        width: rect.width,
-        height: rect.height
+        x: (rect.left - pdfRect.left) / scale,
+        y: (rect.top - pdfRect.top) / scale,
+        width: rect.width / scale,
+        height: rect.height / scale,
+        scale: scale
       };
 
       let res = await fetch("/place_signature", {
