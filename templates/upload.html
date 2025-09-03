@@ -1,29 +1,156 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-    <title>Upload PDF & Signatures</title>
+  <meta charset="utf-8">
+  <title>PDF Signing Tool</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+  <style>
+    #pdf-viewer { border: 1px solid #aaa; position: relative; display: inline-block; }
+    .signature {
+      position: absolute;
+      cursor: move;
+      resize: both;
+      overflow: hidden;
+      border: 2px dashed #444;
+    }
+    .signature img { width: 100%; height: 100%; }
+    .controls { margin: 10px 0; }
+  </style>
 </head>
 <body>
-    <h1>Upload PDF and Signature Images</h1>
+  <h2>Upload PDF and Signature</h2>
+  <form id="uploadForm" method="post" enctype="multipart/form-data">
+    <input type="file" name="pdf" accept=".pdf" required><br><br>
+    <input type="file" name="signature" accept="image/*" required><br><br>
+    <button type="submit">Upload & Preview</button>
+  </form>
 
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <ul style="color:red;">
-          {% for message in messages %}
-            <li>{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
+  <div class="controls">
+    <button id="prevPage" style="display:none;">Previous Page</button>
+    <span id="pageInfo"></span>
+    <button id="nextPage" style="display:none;">Next Page</button>
+  </div>
 
-    <form method="post" enctype="multipart/form-data">
-        <label>PDF File:</label>
-        <input type="file" name="pdf" accept=".pdf" required><br><br>
+  <div id="pdf-viewer"></div>
+  <button id="saveBtn" style="display:none;">Save Signed PDF</button>
 
-        <label>Signature Images:</label>
-        <input type="file" name="signatures" accept="image/*" multiple required><br><br>
+  <script>
+    let pdfDoc, pageNum = 1, signatureEl, sigData;
 
-        <button type="submit">Upload & Sign</button>
-    </form>
+    document.getElementById("uploadForm").onsubmit = async function(e) {
+      e.preventDefault();
+      let formData = new FormData(this);
+
+      let resp = await fetch("/", { method: "POST", body: formData });
+      let blob = await resp.blob();
+      let pdfUrl = URL.createObjectURL(blob);
+
+      pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+        pdfDoc = pdf;
+        pageNum = 1;
+        renderPage(pageNum);
+        document.getElementById("prevPage").style.display = "inline";
+        document.getElementById("nextPage").style.display = "inline";
+      });
+
+      // load signature as image
+      let sigFile = formData.get("signature");
+      let reader = new FileReader();
+      reader.onload = function(e) { sigData = e.target.result; };
+      reader.readAsDataURL(sigFile);
+    };
+
+    function renderPage(num) {
+      pdfDoc.getPage(num).then(function(page) {
+        let scale = 1.5;
+        let viewport = page.getViewport({ scale: scale });
+        let canvas = document.createElement("canvas");
+        let ctx = canvas.getContext("2d");
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        document.getElementById("pdf-viewer").innerHTML = "";
+        document.getElementById("pdf-viewer").appendChild(canvas);
+
+        page.render({ canvasContext: ctx, viewport: viewport });
+
+        // signature overlay
+        signatureEl = document.createElement("div");
+        signatureEl.className = "signature";
+        signatureEl.style.left = "100px";
+        signatureEl.style.top = "100px";
+        signatureEl.style.width = "150px";
+        signatureEl.style.height = "70px";
+        signatureEl.innerHTML = `<img src="${sigData}">`;
+        document.getElementById("pdf-viewer").appendChild(signatureEl);
+
+        // drag & resize
+        interact(".signature")
+          .draggable({ onmove: dragMoveListener })
+          .resizable({ edges: { left: true, right: true, bottom: true, top: true } })
+          .on("resizemove", event => {
+            let { x, y } = event.target.dataset;
+            x = (parseFloat(x) || 0) + event.deltaRect.left;
+            y = (parseFloat(y) || 0) + event.deltaRect.top;
+            Object.assign(event.target.style, {
+              width: `${event.rect.width}px`,
+              height: `${event.rect.height}px`,
+              transform: `translate(${x}px, ${y}px)`
+            });
+            event.target.dataset.x = x;
+            event.target.dataset.y = y;
+          });
+
+        document.getElementById("pageInfo").textContent = `Page ${pageNum} of ${pdfDoc.numPages}`;
+        document.getElementById("saveBtn").style.display = "inline";
+      });
+    }
+
+    function dragMoveListener (event) {
+      let target = event.target;
+      let x = (parseFloat(target.dataset.x) || 0) + event.dx;
+      let y = (parseFloat(target.dataset.y) || 0) + event.dy;
+      target.style.transform = `translate(${x}px, ${y}px)`;
+      target.dataset.x = x;
+      target.dataset.y = y;
+    }
+
+    document.getElementById("prevPage").onclick = function() {
+      if (pageNum <= 1) return;
+      pageNum--;
+      renderPage(pageNum);
+    };
+
+    document.getElementById("nextPage").onclick = function() {
+      if (pageNum >= pdfDoc.numPages) return;
+      pageNum++;
+      renderPage(pageNum);
+    };
+
+    document.getElementById("saveBtn").onclick = async function() {
+      let rect = signatureEl.getBoundingClientRect();
+      let pdfRect = document.querySelector("#pdf-viewer canvas").getBoundingClientRect();
+
+      let coords = {
+        page: pageNum - 1,
+        x: rect.left - pdfRect.left,
+        y: rect.top - pdfRect.top,
+        width: rect.width,
+        height: rect.height
+      };
+
+      let res = await fetch("/place_signature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(coords)
+      });
+
+      let blob = await res.blob();
+      let link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "signed.pdf";
+      link.click();
+    };
+  </script>
 </body>
 </html>
