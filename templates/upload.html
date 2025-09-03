@@ -142,6 +142,8 @@
         scale: scale
       };
 
+      console.log("Browser coords (scaled):", coords);
+
       let res = await fetch("/place_signature", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

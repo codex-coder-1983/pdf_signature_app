@@ -78,6 +78,10 @@ def insert_signature_with_coords(pdf_path, sig_path, output_pdf, coords):
         page_height - y
     )
 
+    print("DEBUG - Browser coords:", coords)
+    print("DEBUG - PDF page height:", page_height)
+    print("DEBUG - Final PDF rect:", rect)
+    
     page.insert_image(rect, filename=sig_path, keep_proportion=False, overlay=True)
 
     doc.save(output_pdf)
