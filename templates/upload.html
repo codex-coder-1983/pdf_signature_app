@@ -35,127 +35,124 @@
   <div id="pdf-viewer"></div>
   <button id="saveBtn" style="display:none;">Save Signed PDF</button>
 
-  <script>
-    let pdfDoc, pageNum = 1, signatureEl, sigData;
-    let scale = 1.5; // keep scale consistent everywhere
+    <script>
+      let pdfDoc, pageNum = 1, signatureEl, sigData, scale = 1.5; // make scale global
 
-    document.getElementById("uploadForm").onsubmit = async function(e) {
-      e.preventDefault();
-      let formData = new FormData(this);
+      document.getElementById("uploadForm").onsubmit = async function(e) {
+        e.preventDefault();
+        let formData = new FormData(this);
 
-      let resp = await fetch("/", { method: "POST", body: formData });
-      let blob = await resp.blob();
-      let pdfUrl = URL.createObjectURL(blob);
+        let resp = await fetch("/", { method: "POST", body: formData });
+        let blob = await resp.blob();
+        let pdfUrl = URL.createObjectURL(blob);
 
-      pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
-        pdfDoc = pdf;
-        pageNum = 1;
-        renderPage(pageNum);
-        document.getElementById("prevPage").style.display = "inline";
-        document.getElementById("nextPage").style.display = "inline";
-      });
+        pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+          pdfDoc = pdf;
+          pageNum = 1;
+          renderPage(pageNum);
+          document.getElementById("prevPage").style.display = "inline";
+          document.getElementById("nextPage").style.display = "inline";
+        });
 
-      // load signature as image
-      let sigFile = formData.get("signature");
-      let reader = new FileReader();
-      reader.onload = function(e) { sigData = e.target.result; };
-      reader.readAsDataURL(sigFile);
-    };
-
-    function renderPage(num) {
-      pdfDoc.getPage(num).then(function(page) {
-        let viewport = page.getViewport({ scale: scale });
-        let canvas = document.createElement("canvas");
-        let ctx = canvas.getContext("2d");
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        document.getElementById("pdf-viewer").innerHTML = "";
-        document.getElementById("pdf-viewer").appendChild(canvas);
-
-        page.render({ canvasContext: ctx, viewport: viewport });
-
-        // signature overlay
-        signatureEl = document.createElement("div");
-        signatureEl.className = "signature";
-        signatureEl.style.left = "100px";
-        signatureEl.style.top = "100px";
-        signatureEl.style.width = "150px";
-        signatureEl.style.height = "70px";
-        signatureEl.innerHTML = `<img src="${sigData}">`;
-        document.getElementById("pdf-viewer").appendChild(signatureEl);
-
-        // drag & resize
-        interact(".signature")
-          .draggable({ onmove: dragMoveListener })
-          .resizable({ edges: { left: true, right: true, bottom: true, top: true } })
-          .on("resizemove", event => {
-            let { x, y } = event.target.dataset;
-            x = (parseFloat(x) || 0) + event.deltaRect.left;
-            y = (parseFloat(y) || 0) + event.deltaRect.top;
-            Object.assign(event.target.style, {
-              width: `${event.rect.width}px`,
-              height: `${event.rect.height}px`,
-              transform: `translate(${x}px, ${y}px)`
-            });
-            event.target.dataset.x = x;
-            event.target.dataset.y = y;
-          });
-
-        document.getElementById("pageInfo").textContent = `Page ${pageNum} of ${pdfDoc.numPages}`;
-        document.getElementById("saveBtn").style.display = "inline";
-      });
-    }
-
-    function dragMoveListener (event) {
-      let target = event.target;
-      let x = (parseFloat(target.dataset.x) || 0) + event.dx;
-      let y = (parseFloat(target.dataset.y) || 0) + event.dy;
-      target.style.transform = `translate(${x}px, ${y}px)`;
-      target.dataset.x = x;
-      target.dataset.y = y;
-    }
-
-    document.getElementById("prevPage").onclick = function() {
-      if (pageNum <= 1) return;
-      pageNum--;
-      renderPage(pageNum);
-    };
-
-    document.getElementById("nextPage").onclick = function() {
-      if (pageNum >= pdfDoc.numPages) return;
-      pageNum++;
-      renderPage(pageNum);
-    };
-
-    document.getElementById("saveBtn").onclick = async function() {
-      let rect = signatureEl.getBoundingClientRect();
-      let canvas = document.querySelector("#pdf-viewer canvas");
-      let pdfRect = canvas.getBoundingClientRect();
-
-      // Convert from canvas pixels → PDF points
-      let coords = {
-        page: pageNum - 1,
-        x: (rect.left - pdfRect.left) / scale,
-        y: (rect.top - pdfRect.top) / scale,
-        width: rect.width / scale,
-        height: rect.height / scale,
-        scale: scale
+        // load signature as image
+        let sigFile = formData.get("signature");
+        let reader = new FileReader();
+        reader.onload = function(e) { sigData = e.target.result; };
+        reader.readAsDataURL(sigFile);
       };
 
-      console.log("Browser coords (scaled):", coords);
+      function renderPage(num) {
+        pdfDoc.getPage(num).then(function(page) {
+          let viewport = page.getViewport({ scale: scale });  // use global scale
+          let canvas = document.createElement("canvas");
+          let ctx = canvas.getContext("2d");
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          document.getElementById("pdf-viewer").innerHTML = "";
+          document.getElementById("pdf-viewer").appendChild(canvas);
 
-      let res = await fetch("/place_signature", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(coords)
-      });
+          page.render({ canvasContext: ctx, viewport: viewport });
 
-      let blob = await res.blob();
-      let link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "signed.pdf";
-      link.click();
-    };
-  </script>
+          // signature overlay
+          signatureEl = document.createElement("div");
+          signatureEl.className = "signature";
+          signatureEl.style.left = "100px";
+          signatureEl.style.top = "100px";
+          signatureEl.style.width = "150px";
+          signatureEl.style.height = "70px";
+          signatureEl.innerHTML = `<img src="${sigData}">`;
+          document.getElementById("pdf-viewer").appendChild(signatureEl);
+
+          // drag & resize
+          interact(".signature")
+            .draggable({ onmove: dragMoveListener })
+            .resizable({ edges: { left: true, right: true, bottom: true, top: true } })
+            .on("resizemove", event => {
+              let { x, y } = event.target.dataset;
+              x = (parseFloat(x) || 0) + event.deltaRect.left;
+              y = (parseFloat(y) || 0) + event.deltaRect.top;
+              Object.assign(event.target.style, {
+                width: `${event.rect.width}px`,
+                height: `${event.rect.height}px`,
+                transform: `translate(${x}px, ${y}px)`
+              });
+              event.target.dataset.x = x;
+              event.target.dataset.y = y;
+            });
+
+          document.getElementById("pageInfo").textContent = `Page ${pageNum} of ${pdfDoc.numPages}`;
+          document.getElementById("saveBtn").style.display = "inline";
+        });
+      }
+
+      function dragMoveListener (event) {
+        let target = event.target;
+        let x = (parseFloat(target.dataset.x) || 0) + event.dx;
+        let y = (parseFloat(target.dataset.y) || 0) + event.dy;
+        target.style.transform = `translate(${x}px, ${y}px)`;
+        target.dataset.x = x;
+        target.dataset.y = y;
+      }
+
+      document.getElementById("prevPage").onclick = function() {
+        if (pageNum <= 1) return;
+        pageNum--;
+        renderPage(pageNum);
+      };
+
+      document.getElementById("nextPage").onclick = function() {
+        if (pageNum >= pdfDoc.numPages) return;
+        pageNum++;
+        renderPage(pageNum);
+      };
+
+      document.getElementById("saveBtn").onclick = async function() {
+        let rect = signatureEl.getBoundingClientRect();
+        let pdfRect = document.querySelector("#pdf-viewer canvas").getBoundingClientRect();
+
+        let coords = {
+          page: pageNum - 1,
+          x: (rect.left - pdfRect.left),   // still in canvas pixels
+          y: (rect.top - pdfRect.top),
+          width: rect.width,
+          height: rect.height,
+          scale: scale                     // send scale too
+        };
+
+        console.log("DEBUG - Browser coords:", coords);
+
+        let res = await fetch("/place_signature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(coords)
+        });
+
+        let blob = await res.blob();
+        let link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "signed.pdf";
+        link.click();
+      };
+    </script>
 </body>
 </html>

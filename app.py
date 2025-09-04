@@ -62,30 +62,30 @@ def place_signature():
     return send_file(output_pdf, as_attachment=True)
 
 
-def insert_signature_with_coords(pdf_path, sig_path, output_pdf, coords):
-    doc = fitz.open(pdf_path)
+def insert_signature_with_coords(input_pdf, sig_path, output_pdf, coords):
+    doc = fitz.open(input_pdf)
     page = doc[coords["page"]]
 
+    # Apply scale correction
+    x = coords["x"] / coords["scale"]
+    y = coords["y"] / coords["scale"]
+    w = coords["width"] / coords["scale"]
+    h = coords["height"] / coords["scale"]
+
     page_height = page.rect.height
-    x, y = coords["x"], coords["y"]
-    width, height = coords["width"], coords["height"]
 
-    # Flip y coordinate (browser top-left → PDF bottom-left)
-    rect = fitz.Rect(
-        x,
-        page_height - y - height,
-        x + width,
-        page_height - y
-    )
+    # Flip Y because PDF origin is bottom-left
+    y_pdf = page_height - (y + h)
 
-    print("DEBUG - Browser coords:", coords, flush=True)
-    print("DEBUG - PDF page height:", page_height, flush=True)
-    print("DEBUG - Final PDF rect:", rect, flush=True)    
-    
-    page.insert_image(rect, filename=sig_path, keep_proportion=False, overlay=True)
+    rect = fitz.Rect(x, y_pdf, x + w, y_pdf + h)
 
+    print("DEBUG - Corrected PDF rect:", rect, flush=True)
+
+    page.insert_image(rect, filename=sig_path)
     doc.save(output_pdf)
     doc.close()
+    return rect
+
 
 
 
